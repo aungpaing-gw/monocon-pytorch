@@ -30,9 +30,18 @@ class MonoconEngine(BaseEngine):
         super().__init__(cfg, **kwargs)
 
     def build_model(self):
+        ddml_config = None
+        if self.cfg.SOLVER.DDML.QI_LOSS:
+            ddml_config = {
+                "K": self.cfg.SOLVER.DDML.K,
+                "B": self.cfg.SOLVER.DDML.B,
+                "RAD": self.cfg.SOLVER.DDML.RAD,
+            }
+
         detector = MonoConDetector(
             num_dla_layers=self.cfg.MODEL.BACKBONE.NUM_LAYERS,
             pretrained_backbone=self.cfg.MODEL.BACKBONE.IMAGENET_PRETRAINED,
+            ddml_config=ddml_config,
         )
         return detector.to(self.current_device)
 

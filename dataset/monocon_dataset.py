@@ -27,9 +27,9 @@ default_train_transforms = [
         saturation_range=(0.5, 1.5),
         hue_delta=18,
     ),
-    RandomShift(prob=0.5, shift_range=(-32, 32), hide_kpts_in_shift_area=True),
-    RandomHorizontalFlip(prob=0.5),
-    RandomCrop3D(prob=0.5, crop_size=(320, 960), hide_kpts_in_crop_area=True),
+    # RandomShift(prob=0.5, shift_range=(-32, 32), hide_kpts_in_shift_area=True),
+    # RandomHorizontalFlip(prob=0.5),
+    # RandomCrop3D(prob=0.5, crop_size=(320, 960), hide_kpts_in_crop_area=True),
     Normalize(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375]),
     Pad(size_divisor=32),
     ToTensor(),
@@ -69,9 +69,7 @@ class MonoConDataset(BaseKITTIMono3DDataset):
         else:
             cfg_keys = list(filter_configs.keys())
             flag = all([(key in DEFAULT_FILTER_CONFIG) for key in cfg_keys])
-            assert (
-                flag
-            ), f"Keys in argument 'configs' must be one in {list(DEFAULT_FILTER_CONFIG.keys())}."
+            assert flag, f"Keys in argument 'configs' must be one in {list(DEFAULT_FILTER_CONFIG.keys())}."
 
         for k, v in filter_configs.items():
             setattr(self, k, v)

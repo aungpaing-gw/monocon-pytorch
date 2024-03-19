@@ -32,6 +32,7 @@ class MonoConDetector(nn.Module):
         pretrained_backbone: bool = True,
         head_config: Dict[str, Any] = None,
         test_config: Dict[str, Any] = None,
+        ddml_config: dict[str, float] = None,
     ):
         super().__init__()
 
@@ -49,7 +50,10 @@ class MonoConDetector(nn.Module):
             head_in_ch = 128
 
         self.head = MonoConDenseHeads(
-            in_ch=head_in_ch, test_config=test_config, **head_config
+            in_ch=head_in_ch,
+            test_config=test_config,
+            ddml_config=ddml_config,
+            **head_config,
         )
 
     def forward(

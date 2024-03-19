@@ -37,6 +37,44 @@ DEFAULT_TEST_CFG = {
 }
 
 
+# Referece from DDML-M3DOD, https://github.com/mingyuShin/DDML-M3DOD/blob/c378da38b710c56e4777da4ea079f8345ea0b60f/lib/losses/centernet_loss.py#L11
+def update_K_return_loss(feat, dep_tar, K, B, rad, temperature=10.0):
+    lambda_metric = 0.5
+    loss = 0.0
+    x = feat.unsqueeze(0)  # 1xnum_obj_cls x C
+    feat_dist = torch.cdist(
+        x, x.detach(), p=2.0
+    ).squeeze(
+        0
+    )  # num_obj_cls x num_obj_cls    e_ij : L2 distance between features of obj_i & obj_2
+    y = dep_tar.unsqueeze(0)
+    dep_dist = torch.cdist(y, y, p=2.0).squeeze(
+        0
+    )  # num_obj_cls x num_obj_cls    e_ij : L2 distance between depths of obj_i & obj_2
+    upper_slope = torch.triu(
+        (feat_dist - (K * dep_dist) - B), diagonal=1
+    )  # positive values in this matrix is out of upper bound
+    lower_slope = torch.triu(
+        ((1.0 / K) * dep_dist - feat_dist - B), diagonal=1
+    )  # positive values in this matrix is out of lower bound
+    mask = (dep_dist <= rad) * (dep_dist > 1e-12)
+    masked_upper_slope = upper_slope[mask]
+    masked_lower_slope = lower_slope[mask]
+
+    pos_ancs = torch.exp(
+        -masked_upper_slope[masked_upper_slope > 0] / temperature
+    )  # N_obj
+    neg_anc = torch.sum(
+        torch.exp(-masked_lower_slope[masked_lower_slope > 0] / temperature)
+    )  # scalar
+    tmp = torch.mean(
+        -torch.log(pos_ancs / (pos_ancs + neg_anc))
+    )  # R^N / R^N -> R^N vector
+    loss += torch.nan_to_num(tmp, nan=0.0, posinf=0.0, neginf=0.0)
+
+    return lambda_metric * loss
+
+
 class MonoConDenseHeads(nn.Module):
     def __init__(
         self,
@@ -47,6 +85,7 @@ class MonoConDenseHeads(nn.Module):
         num_classes: int = 3,
         max_objs: int = 30,
         test_config: Dict[str, Any] = None,
+        ddml_config: Dict[str, float] = None,
     ):
         super().__init__()
 
@@ -114,6 +153,8 @@ class MonoConDenseHeads(nn.Module):
         self.crit_alpha_cls = CrossEntropyLoss(use_sigmoid=True, loss_weight=1.0)
         self.crit_alpha_reg = L1Loss(loss_weight=1.0)
 
+        self.ddml_config = ddml_config
+
     def _build_head(self, in_ch: int, feat_ch: int, out_channel: int) -> nn.Module:
         layers = [
             nn.Conv2d(in_ch, feat_ch, kernel_size=3, padding=1),
@@ -163,7 +204,7 @@ class MonoConDenseHeads(nn.Module):
     ) -> Dict[str, torch.Tensor]:
         target_dict = self.target_generator(data_dict, feat_shape=tuple(feat.shape))
         pred_dict = self._get_predictions(feat)
-        loss_dict = self._get_losses(pred_dict, target_dict)
+        loss_dict = self._get_losses(pred_dict, target_dict, feat)
         return (pred_dict, loss_dict)
 
     # Get predictions for test
@@ -214,7 +255,10 @@ class MonoConDenseHeads(nn.Module):
         }
 
     def _get_losses(
-        self, pred_dict: Dict[str, torch.Tensor], target_dict: Dict[str, torch.Tensor]
+        self,
+        pred_dict: Dict[str, torch.Tensor],
+        target_dict: Dict[str, torch.Tensor],
+        feat: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
         # Indices and Mask
         indices = target_dict["indices"]
@@ -248,6 +292,15 @@ class MonoConDenseHeads(nn.Module):
 
         depth_pred, depth_log_var = depth_pred[:, 0:1], depth_pred[:, 1:2]
         depth_loss = self.crit_depth(depth_pred, depth_target, depth_log_var)
+
+        # Qi Loss : reference from https://github.com/mingyuShin/DDML-M3DOD/blob/main/lib/losses/centernet_loss.py
+        qi_loss = 0
+        if self.ddml_config is not None:
+            x = extract_input(feat, indices, mask_target)
+            K = self.ddml_config["K"]
+            B = self.ddml_config["B"]
+            rad = self.ddml_config["RAD"]
+            qi_loss = update_K_return_loss(x, depth_target, K, B, rad)
 
         #
         # Heatmap Losses
@@ -348,6 +401,7 @@ class MonoConDenseHeads(nn.Module):
             "loss_alpha_cls": loss_alpha_cls,
             "loss_alpha_reg": loss_alpha_reg,
             "loss_depth": depth_loss,
+            "loss_qi": qi_loss,
         }
 
     def _get_bboxes(
@@ -487,9 +541,7 @@ class MonoConDenseHeads(nn.Module):
         )
         center2kpt_offset = center2kpt_offset.view(
             batch, self.topk, (self.num_kpts * 2)
-        )[
-            ..., -2:
-        ]  # (B, K, 2)
+        )[..., -2:]  # (B, K, 2)
 
         x_offset = xs.view(batch, self.topk, 1)
         x_scale = img_w / feat_w
