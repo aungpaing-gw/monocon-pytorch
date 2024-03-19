@@ -18,22 +18,22 @@ def l1_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
 
 
 class L1Loss(nn.Module):
-    def __init__(self, 
-                 reduction: str = 'mean', 
-                 loss_weight: float = 1.0):
-        
+    def __init__(self, reduction: str = "mean", loss_weight: float = 1.0):
         super().__init__()
-        
+
         self.reduction = reduction
         self.loss_weight = loss_weight
 
-    def forward(self,
-                pred: torch.Tensor,
-                target: torch.Tensor,
-                weight: Optional[torch.Tensor] = None,
-                avg_factor: Optional[int] = None,
-                reduction_override: Optional[str] = None) -> torch.Tensor:
-        
-        assert reduction_override in (None, 'none', 'mean', 'sum')
-        reduction = (reduction_override if reduction_override else self.reduction)
-        return self.loss_weight * l1_loss(pred, target, weight, reduction=reduction, avg_factor=avg_factor)
+    def forward(
+        self,
+        pred: torch.Tensor,
+        target: torch.Tensor,
+        weight: Optional[torch.Tensor] = None,
+        avg_factor: Optional[int] = None,
+        reduction_override: Optional[str] = None,
+    ) -> torch.Tensor:
+        assert reduction_override in (None, "none", "mean", "sum")
+        reduction = reduction_override if reduction_override else self.reduction
+        return self.loss_weight * l1_loss(
+            pred, target, weight, reduction=reduction, avg_factor=avg_factor
+        )

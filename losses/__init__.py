@@ -5,8 +5,10 @@ from .focal_loss import GaussianFocalLoss
 from .l1_loss import L1Loss
 
 
-__all__ = ['CrossEntropyLoss', 
-           'LaplacianAleatoricUncertaintyLoss', 
-           'DimAwareL1Loss', 
-           'GaussianFocalLoss', 
-           'L1Loss']
+__all__ = [
+    "CrossEntropyLoss",
+    "LaplacianAleatoricUncertaintyLoss",
+    "DimAwareL1Loss",
+    "GaussianFocalLoss",
+    "L1Loss",
+]

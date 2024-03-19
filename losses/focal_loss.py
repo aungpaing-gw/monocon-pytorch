@@ -3,19 +3,20 @@ import torch.nn as nn
 
 
 class GaussianFocalLoss(nn.Module):
-    def __init__(self, 
-                 loss_weight: float = 1.0, 
-                 gamma: float = 2.0, 
-                 beta: float = 4.0, 
-                 alpha: float = -1.0):
-        
+    def __init__(
+        self,
+        loss_weight: float = 1.0,
+        gamma: float = 2.0,
+        beta: float = 4.0,
+        alpha: float = -1.0,
+    ):
         super().__init__()
-        
+
         self.loss_weight = loss_weight
         self.gamma = gamma
         self.beta = beta
         self.alpha = alpha
-        
+
         self.eps = 1e-12
 
     def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -27,8 +28,15 @@ class GaussianFocalLoss(nn.Module):
 
         loss = 0
 
-        pos_loss = torch.log(input + self.eps) * torch.pow((1 - input), self.gamma) * pos_inds
-        neg_loss = torch.log((1 - input) + self.eps) * torch.pow(input, self.gamma) * neg_weights * neg_inds
+        pos_loss = (
+            torch.log(input + self.eps) * torch.pow((1 - input), self.gamma) * pos_inds
+        )
+        neg_loss = (
+            torch.log((1 - input) + self.eps)
+            * torch.pow(input, self.gamma)
+            * neg_weights
+            * neg_inds
+        )
 
         pos_loss = pos_loss.sum()
         neg_loss = neg_loss.sum()
