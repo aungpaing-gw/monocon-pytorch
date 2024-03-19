@@ -4,6 +4,7 @@ import warnings
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from typing import Tuple, List, Dict, Any
 
@@ -75,6 +76,25 @@ def update_K_return_loss(feat, dep_tar, K, B, rad, temperature=10.0):
     return lambda_metric * loss
 
 
+def compute_obj_depth_loss(preds, target, feat, loss_fn):
+    dep_in = preds["depth_obj_pred"]
+    dep_tar = F.interpolate(
+        target["depth_objs"].unsqueeze(1),
+        size=(feat.shape[-2], feat.shape[-1]),
+        mode="bilinear",
+        align_corners=True,
+    )
+    tar_mask = ~(dep_tar == 0)
+    depth_input, depth_log_variance = dep_in[:, 0:1][tar_mask], dep_in[:, 1:2][tar_mask]
+    depth_input = 1.0 / (depth_input.sigmoid() + 1e-6) - 1.0
+    depth_target = dep_tar[tar_mask]
+    depth_loss = loss_fn(depth_input, depth_target, depth_log_variance)
+    return depth_loss
+
+
+# End of reference
+
+
 class MonoConDenseHeads(nn.Module):
     def __init__(
         self,
@@ -110,6 +130,7 @@ class MonoConDenseHeads(nn.Module):
         for k, v in test_config.items():
             setattr(self, k, v)
 
+        self.ddml_config = ddml_config
         """
         Prediction Heads
         """
@@ -131,6 +152,10 @@ class MonoConDenseHeads(nn.Module):
         self.depth_head = self._build_head(in_ch, feat_ch, (1 + 1))
         self.dir_feat, self.dir_cls, self.dir_reg = self._build_dir_head(in_ch, feat_ch)
 
+        if ddml_config is not None:
+            # Create Auxilliary head for depth obj predictions
+            self.depth_obj_head = self._build_head(in_ch, feat_ch, 2)
+
         self.init_weights()
 
         """
@@ -150,10 +175,9 @@ class MonoConDenseHeads(nn.Module):
         # Losses for 3D Properties
         self.crit_dim = DimAwareL1Loss(loss_weight=1.0)
         self.crit_depth = LaplacianAleatoricUncertaintyLoss(loss_weight=1.0)
+        self.crit_depth_obj = LaplacianAleatoricUncertaintyLoss(loss_weight=1.0)
         self.crit_alpha_cls = CrossEntropyLoss(use_sigmoid=True, loss_weight=1.0)
         self.crit_alpha_reg = L1Loss(loss_weight=1.0)
-
-        self.ddml_config = ddml_config
 
     def _build_head(self, in_ch: int, feat_ch: int, out_channel: int) -> nn.Module:
         layers = [
@@ -241,6 +265,10 @@ class MonoConDenseHeads(nn.Module):
         alpha_cls_pred = self.dir_cls(alpha_feat)
         alpha_offset_pred = self.dir_reg(alpha_feat)
 
+        depth_obj_pred = None
+        if self.ddml_config:
+            depth_obj_pred = self.depth_obj_head(feat)
+
         return {
             "center_heatmap_pred": center_heatmap_pred,
             "kpt_heatmap_pred": kpt_heatmap_pred,
@@ -252,6 +280,7 @@ class MonoConDenseHeads(nn.Module):
             "depth_pred": depth_pred,
             "alpha_cls_pred": alpha_cls_pred,
             "alpha_offset_pred": alpha_offset_pred,
+            "depth_obj_pred": depth_obj_pred,
         }
 
     def _get_losses(
@@ -293,14 +322,19 @@ class MonoConDenseHeads(nn.Module):
         depth_pred, depth_log_var = depth_pred[:, 0:1], depth_pred[:, 1:2]
         depth_loss = self.crit_depth(depth_pred, depth_target, depth_log_var)
 
-        # Qi Loss : reference from https://github.com/mingyuShin/DDML-M3DOD/blob/main/lib/losses/centernet_loss.py
+        # DDML Object, Qi Loss : reference from
+        # https://github.com/mingyuShin/DDML-M3DOD/blob/main/lib/losses/centernet_loss.py
         qi_loss = 0
+        obj_loss = 0
         if self.ddml_config is not None:
             x = extract_input(feat, indices, mask_target)
             K = self.ddml_config["K"]
             B = self.ddml_config["B"]
             rad = self.ddml_config["RAD"]
             qi_loss = update_K_return_loss(x, depth_target, K, B, rad)
+            obj_loss = compute_obj_depth_loss(
+                pred_dict, target_dict, feat, self.crit_depth_obj
+            )
 
         #
         # Heatmap Losses
@@ -402,6 +436,7 @@ class MonoConDenseHeads(nn.Module):
             "loss_alpha_reg": loss_alpha_reg,
             "loss_depth": depth_loss,
             "loss_qi": qi_loss,
+            "loss_obj": obj_loss,
         }
 
     def _get_bboxes(

@@ -3,6 +3,7 @@ import sys
 import cv2
 import json
 import numpy as np
+import torch
 
 from tqdm.auto import tqdm
 from typing import List, Tuple, Dict, Any
@@ -83,6 +84,18 @@ class BaseKITTIMono3DDataset(Dataset):
             "ori_shape": image_data.shape[:2],
         }
         return (image_data, img_metas)
+
+    def load_depth_obj(self, idx: int):
+        file_name = (
+            self.image_files[idx]
+            .replace("image_2", "obj_depth_all")
+            .replace("png", "npy")
+        )
+        image_arr = None
+        if os.path.exists(file_name):
+            image_arr = cv2.resize(np.load(file_name), (1242, 375))
+            image_arr = torch.Tensor(image_arr)
+        return image_arr
 
     def load_calib(self, idx: int) -> KITTICalibration:
         return KITTICalibration(self.calib_files[idx])

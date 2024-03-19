@@ -6,6 +6,7 @@ import numpy as np
 from typing import List, Dict, Any
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+import cv2
 
 from transforms import *
 from dataset.base_dataset import BaseKITTIMono3DDataset
@@ -78,6 +79,8 @@ class MonoConDataset(BaseKITTIMono3DDataset):
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         image, img_metas = self.load_image(idx)
         calib = self.load_calib(idx)
+        # For DDML-D3D model
+        depth_objs = self.load_depth_obj(idx)
 
         # Raw State: Cam0 + Bottom-Center + Global Yaw
         # Converted to Cam2 + Local Yaw
@@ -148,6 +151,7 @@ class MonoConDataset(BaseKITTIMono3DDataset):
             "img_metas": img_metas,
             "calib": calib,
             "label": new_labels,
+            "depth_objs": depth_objs,
         }
 
         result_dict = self.transforms(result_dict)
@@ -171,6 +175,9 @@ class MonoConDataset(BaseKITTIMono3DDataset):
     def collate_fn(batched: List[Dict[str, Any]]) -> Dict[str, Any]:
         # Merge Image
         merged_image = torch.cat([d["img"].unsqueeze(0) for d in batched], dim=0)
+        merged_depth_objs = torch.cat(
+            [d["depth_objs"].unsqueeze(0) for d in batched], dim=0
+        )
 
         # Merge Image Metas
         img_metas_list = [d["img_metas"] for d in batched]
@@ -196,4 +203,5 @@ class MonoConDataset(BaseKITTIMono3DDataset):
             "img_metas": merged_metas,
             "calib": merged_calib,
             "label": merged_label,
+            "depth_objs": merged_depth_objs,
         }

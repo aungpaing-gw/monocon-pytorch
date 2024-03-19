@@ -123,7 +123,7 @@ class TargetGenerator:
                     )
                     target["center2kpt_offset_target"][
                         b_idx, o_idx, (k_idx * 2) + 1
-                    ] = (kpty - cty_int)
+                    ] = kpty - cty_int
 
                     target["mask_center2kpt_offset"][
                         b_idx, o_idx, (k_idx * 2) : ((k_idx + 1) * 2)
@@ -149,13 +149,14 @@ class TargetGenerator:
                     )
                     target["kpt_heatmap_offset_target"][
                         b_idx, o_idx, (k_idx * 2) + 1
-                    ] = (kpty - kpty_int)
+                    ] = kpty - kpty_int
                     target["mask_kpt_heatmap_offset"][
                         b_idx, o_idx, (k_idx * 2) : ((k_idx + 1) * 2)
                     ] = 1
 
         target["indices_kpt"] = (target["indices_kpt"]).reshape(batch_size, -1)
         target["mask_target"] = (target["mask_target"]).type(torch.BoolTensor)
+        target["depth_objs"] = input_dict["depth_objs"]
         return target
 
     def _convert_angle_to_class(self, angle: float):
