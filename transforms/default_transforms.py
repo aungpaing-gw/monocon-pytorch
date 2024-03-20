@@ -14,7 +14,7 @@ from transforms import BaseTransform
 
 class Resize3D(BaseTransform):
     def __init__(self, target_hw: Union[int, Tuple[int, int]] = None):
-        super().__init__(True, True, True, True)
+        super().__init__(True, True, True, True, True)
 
         if (target_hw is not None) and isinstance(target_hw, int):
             target_hw = (target_hw, target_hw)
@@ -31,6 +31,13 @@ class Resize3D(BaseTransform):
             img, self.target_hw[::-1]
         )  # (target_H, target_W, C) / np.ndarray
         data_dict["img"] = img
+
+        depth_objs = data_dict["depth_objs"]  # (H, W, C) / np.ndarray
+        ori_hw = depth_objs.shape[:2]
+        depth_objs = cv2.resize(
+            depth_objs, self.target_hw[::-1]
+        )  # (target_H, target_W, C) / np.ndarray
+        data_dict["depth_objs"] = depth_objs
 
         # Get Rescale Factor
         scale_hw = np.array(self.target_hw) / np.array(ori_hw)
@@ -60,7 +67,7 @@ class PhotometricDistortion(BaseTransform):
         saturation_range: Tuple[float, float] = (0.5, 1.5),
         hue_delta: int = 18,
     ):
-        super().__init__(True, False, False, False)
+        super().__init__(True, False, False, False, False)
 
         self.brightness_delta = brightness_delta
         self.contrast_lower, self.contrast_upper = contrast_range
@@ -134,7 +141,7 @@ class RandomShift(BaseTransform):
         shift_range: Tuple[float, float] = (-32.0, 32.0),
         hide_kpts_in_shift_area: bool = True,
     ):
-        super().__init__(True, True, True, True)
+        super().__init__(True, True, True, True, True)
 
         assert 0.0 <= prob <= 1.0
         self.prob = prob
@@ -240,6 +247,19 @@ class RandomShift(BaseTransform):
                 orig_y : (orig_y + new_h), orig_x : (orig_x + new_w)
             ]
             data_dict["img"] = canvas
+
+            # Shift Depth Image
+            depth_objs = data_dict["depth_objs"]  # (H, W)
+            canvas = np.zeros_like(depth_objs)
+            canvas[new_y : (new_y + new_h), new_x : (new_x + new_w)] = depth_objs[
+                orig_y : (orig_y + new_h), orig_x : (orig_x + new_w)
+            ]
+            data_dict["depth_objs"] = canvas
+            mask3d_obj_depth = data_dict["label"]["3d_mask"]
+            data_dict["label"]["3d_mask"] = np.zeros(
+                mask3d_obj_depth.shape, dtype=np.bool_
+            )
+
             return data_dict
 
     def _break(self, data_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -308,7 +328,7 @@ class RandomShift(BaseTransform):
 
 class RandomHorizontalFlip(BaseTransform):
     def __init__(self, prob: float = 0.50):
-        super().__init__(True, True, True, True)
+        super().__init__(True, True, True, True, True)
 
         assert 0.0 <= prob <= 1.0
         self.prob = prob
@@ -325,6 +345,8 @@ class RandomHorizontalFlip(BaseTransform):
             # Flip Image
             img = data_dict["img"]
             data_dict["img"] = img[:, ::-1, :]
+            depth_obj = data_dict["depth_objs"]
+            data_dict["depth_objs"] = depth_obj[:, ::-1, :]
 
             # Update Meta
             metas = data_dict["img_metas"]
@@ -400,7 +422,7 @@ class RandomHorizontalFlip(BaseTransform):
 
 class Normalize(BaseTransform):
     def __init__(self, mean: List[float], std: List[float], keep_origin: bool = False):
-        super().__init__(True, False, False, False)
+        super().__init__(True, False, False, False, False)
 
         if isinstance(mean, Number):
             mean = [
@@ -428,18 +450,20 @@ class Normalize(BaseTransform):
 
         norm_img = (img - mean) / std
         data_dict["img"] = norm_img
+
         return data_dict
 
 
 class Pad(BaseTransform):
     def __init__(self, size_divisor: int):
-        super().__init__(True, True, False, False)
+        super().__init__(True, True, False, False, True)
 
         self.size_divisor = size_divisor
 
     def __call__(self, data_dict: Dict[str, Any]) -> Dict[str, Any]:
         # Pad Image
         img = data_dict["img"]  # (H, W, C) / np.ndarray
+
         ori_h, ori_w = img.shape[:2]
         padded_h = int(np.ceil(ori_h / self.size_divisor)) * self.size_divisor
         padded_w = int(np.ceil(ori_w / self.size_divisor)) * self.size_divisor
@@ -447,6 +471,13 @@ class Pad(BaseTransform):
         canvas = np.zeros((padded_h, padded_w, 3), dtype=img.dtype)
         canvas[:ori_h, :ori_w, :] = img
         data_dict["img"] = canvas
+
+        # Pad Depth Image
+        depth_objs = data_dict["depth_objs"]
+        depth_objs = cv2.resize(depth_objs, (ori_w, ori_h))
+        canvas = np.zeros((padded_h, padded_w), dtype=img.dtype)
+        canvas[:ori_h, :ori_w] = depth_objs
+        data_dict["depth_objs"] = canvas
 
         # Update Meta
         img_metas = data_dict["img_metas"]
@@ -458,7 +489,7 @@ class Pad(BaseTransform):
 
 class ToTensor(BaseTransform):
     def __init__(self):
-        super().__init__(True, False, False, True)
+        super().__init__(True, False, False, True, True)
 
     def __call__(self, data_dict: Dict[str, Any]) -> Dict[str, Any]:
         # Convert image to tensor
@@ -468,6 +499,13 @@ class ToTensor(BaseTransform):
             except:
                 img = torch.Tensor(data_dict["img"].copy()).permute(2, 0, 1)
             data_dict["img"] = img
+
+        if "depth_objs" in data_dict.keys():
+            try:
+                depth_obj = torch.Tensor(data_dict["depth_objs"])
+            except:
+                depth_obj = torch.Tensor(data_dict["depth_objs"].copy())
+            data_dict["depth_objs"] = depth_obj
 
         # Convert ground-truth data to tensor
         if "label" in data_dict.keys():

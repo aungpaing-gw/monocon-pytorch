@@ -145,6 +145,7 @@ class MonoConDataset(BaseKITTIMono3DDataset):
             new_labels["gt_kpts_valid_mask"][obj_idx] = keypoints[:, 2]
 
             new_labels["mask"][obj_idx] = True
+            new_labels["3d_mask"][obj_idx] = True
 
         result_dict = {
             "img": image,
@@ -168,6 +169,7 @@ class MonoConDataset(BaseKITTIMono3DDataset):
             "gt_kpts_2d": np.zeros((self.max_objs, 18), dtype=np.float32),
             "gt_kpts_valid_mask": np.zeros((self.max_objs, 9), dtype=np.uint8),
             "mask": np.zeros((self.max_objs,), dtype=np.bool_),
+            "3d_mask": np.zeros((self.max_objs,), dtype=np.bool_),
         }
         return annot_dict
 

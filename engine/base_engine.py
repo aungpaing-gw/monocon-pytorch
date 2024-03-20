@@ -97,7 +97,7 @@ class BaseEngine:
         assert torch.cuda.is_available(), "CUDA is not available."
         assert (
             self.epochs < self.target_epochs
-        ), "Argument 'target_epochs' must be equal to or greater than 'epochs'."
+        ), f"Argument 'target_epochs' {self.target_epochs} must be equal to or greater than 'epochs'. {self.epochs}"
 
         # Print Info
         self._print_engine_info()

@@ -327,11 +327,15 @@ class MonoConDenseHeads(nn.Module):
         qi_loss = 0
         obj_loss = 0
         if self.ddml_config is not None:
-            x = extract_input(feat, indices, mask_target)
+            mask_3d_target = target_dict["mask_3d_target"].to(device)
+            x = extract_input(feat, indices, mask_3d_target)
+            depth_3d_target = extract_target(
+                target_dict["depth_target"], mask_3d_target
+            )
             K = self.ddml_config["K"]
             B = self.ddml_config["B"]
             rad = self.ddml_config["RAD"]
-            qi_loss = update_K_return_loss(x, depth_target, K, B, rad)
+            qi_loss = update_K_return_loss(x, depth_3d_target, K, B, rad)
             obj_loss = compute_obj_depth_loss(
                 pred_dict, target_dict, feat, self.crit_depth_obj
             )

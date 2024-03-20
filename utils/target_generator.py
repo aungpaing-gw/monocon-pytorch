@@ -156,6 +156,7 @@ class TargetGenerator:
 
         target["indices_kpt"] = (target["indices_kpt"]).reshape(batch_size, -1)
         target["mask_target"] = (target["mask_target"]).type(torch.BoolTensor)
+        target["mask_3d_target"] = (label["3d_mask"]).type(torch.BoolTensor)
         target["depth_objs"] = input_dict["depth_objs"]
         return target
 

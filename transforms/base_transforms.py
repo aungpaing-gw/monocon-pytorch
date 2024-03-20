@@ -8,11 +8,13 @@ class BaseTransform:
         change_metas: bool,
         change_calib: bool,
         change_label: bool,
+        change_depth_obj: bool,
     ):
         self._change_img = change_img
         self._change_metas = change_metas
         self._change_calib = change_calib
         self._change_label = change_label
+        self._change_depth_obj = change_depth_obj
 
     def __call__(self, data_dict: Dict[str, Any]) -> Dict[str, Any]:
         raise NotImplementedError

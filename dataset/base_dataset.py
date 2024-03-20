@@ -94,7 +94,7 @@ class BaseKITTIMono3DDataset(Dataset):
         image_arr = None
         if os.path.exists(file_name):
             image_arr = cv2.resize(np.load(file_name), (1242, 375))
-            image_arr = torch.Tensor(image_arr)
+            # image_arr = torch.Tensor(image_arr)
         return image_arr
 
     def load_calib(self, idx: int) -> KITTICalibration:
