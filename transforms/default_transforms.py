@@ -346,7 +346,7 @@ class RandomHorizontalFlip(BaseTransform):
             img = data_dict["img"]
             data_dict["img"] = img[:, ::-1, :]
             depth_obj = data_dict["depth_objs"]
-            data_dict["depth_objs"] = depth_obj[:, ::-1, :]
+            data_dict["depth_objs"] = depth_obj[:, ::-1]
 
             # Update Meta
             metas = data_dict["img_metas"]

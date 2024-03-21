@@ -19,7 +19,7 @@ class RandomCrop3D(BaseTransform):
         hide_kpts_in_crop_area: bool = False,
         area_filter_thres: float = 0.20,
     ):
-        super().__init__(True, True, False, True)
+        super().__init__(True, True, False, True, True)
 
         assert 0.0 <= prob <= 1.0
         self.prob = prob
@@ -248,6 +248,7 @@ class RandomRangeCrop3D(BaseTransform):
 
         else:
             img = data_dict["img"]
+            depth_objs = data_dict["depth_objs"]
             metas = data_dict["img_metas"]
             label = data_dict["label"]
 
@@ -325,6 +326,16 @@ class RandomRangeCrop3D(BaseTransform):
                 crop_coord[1] : crop_coord[3], crop_coord[0] : crop_coord[2], :
             ] = img[crop_coord[1] : crop_coord[3], crop_coord[0] : crop_coord[2], :]
             data_dict["img"] = canvas
+
+            data_dict["label"]["3d_mask"] = np.zeros(
+                    updated_mask.shape, dtype=np.bool_
+                    )
+
+            # Crop Depth map
+            canvas = np.zeros_like(depth_objs)
+            canvas[
+                crop_coord[1] : crop_coord[3], crop_coord[0] : crop_coord[2]] = img[crop_coord[1] : crop_coord[3], crop_coord[0] : crop_coord[2]]
+            data_dict["depth_objs"] = canvas
             return data_dict
 
     def _select_crop_pos(
